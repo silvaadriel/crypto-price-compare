@@ -1,0 +1,96 @@
+openapi: 3.0.0
+info:
+  title: CryptoPriceCompare API
+  description: API for comparing cryptocurrency prices
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+tags:
+  - name: Price
+    description: Operations related to cryptocurrency price.
+paths:
+  /price/compare:
+    get:
+      tags:
+        - Price
+      summary: Compare cryptocurrency prices between exchanges
+      description: Returns a comparison of cryptocurrency prices between different exchanges, based on the specified base and quote currencies.
+      operationId: getPriceCompare
+      parameters:
+        - $ref: '#/components/parameters/baseSymbol'
+        - $ref: '#/components/parameters/quoteSymbol'
+      responses:
+        '200':
+          description: Prices compared successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceComparisonResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  parameters:
+    baseSymbol:
+      name: baseSymbol
+      in: query
+      description: The symbol of the base currency whose price is being sought.
+      required: true
+      schema:
+        $ref: '#/components/schemas/BaseSymbol'
+    quoteSymbol:
+      name: quoteSymbol
+      in: query
+      description: The symbol of the quote currency in which the price of the base currency should be returned.
+      required: true
+      schema:
+        $ref: '#/components/schemas/QuoteSymbol'
+  schemas:
+    BaseSymbol:
+      type: string
+      enum:
+        - BTC
+        - ETH
+        - LTC
+    QuoteSymbol:
+      type: string
+      enum:
+        - USD
+        - EUR
+        - BRL
+    ExchangePrice:
+      type: object
+      properties:
+        exchange:
+          type: string
+          description: The name of the exchange.
+          example: Binance
+        price:
+          type: string
+          description: The price of the base currency on the exchange, expressed in the quote currency.
+          example: "50000"
+    PriceComparisonResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExchangePrice'
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Error code
+        description:
+          type: string
+          description: Error message
