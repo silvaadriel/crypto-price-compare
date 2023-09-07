@@ -1,6 +1,6 @@
 package com.example.cryptopricecompare.web.handler;
 
-import com.example.cryptopricecompare.exception.NotFoundException;
+import com.example.cryptopricecompare.exception.EmptyResponseBodyException;
 import com.example.cryptopricecompare.model.dto.CryptoPriceCompareErrorDTO;
 import feign.FeignException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,10 +24,10 @@ public class RestControllerHandler {
     private final static String INTERNAL_SERVER_ERROR_CODE = "003";
     private final static String INTERNAL_SERVER_ERROR_MESSAGE = "Unexpected internal server error.";
 
-    @ExceptionHandler(NotFoundException.class)
+    @ExceptionHandler(EmptyResponseBodyException.class)
     @ResponseBody
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public CryptoPriceCompareErrorDTO handleNotFound(final HttpServletRequest req, final NotFoundException ex) {
+    public CryptoPriceCompareErrorDTO handleNotFound(final HttpServletRequest req, final EmptyResponseBodyException ex) {
         logErrorMessage(req, ex);
         return new CryptoPriceCompareErrorDTO(BUSINESS_RULE_CODE, ex.getMessage());
     }

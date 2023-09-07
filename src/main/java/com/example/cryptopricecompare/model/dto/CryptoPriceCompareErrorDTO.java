@@ -12,8 +12,8 @@ public class CryptoPriceCompareErrorDTO extends Error {
 
     public CryptoPriceCompareErrorDTO(final String code, final String message, final String messageDetail) {
         super();
-        final String detalheMensagem = Strings.isNotBlank(messageDetail) ? String.format(" [%s]", messageDetail) : null;
-        this.code(code).description(message + detalheMensagem);
+        final String formattedMessage = Strings.isNotBlank(messageDetail) ? String.format("%s [%s]", message, messageDetail) : message;
+        this.code(code).description(formattedMessage);
     }
 
 }

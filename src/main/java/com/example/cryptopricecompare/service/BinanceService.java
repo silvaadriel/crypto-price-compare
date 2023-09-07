@@ -1,6 +1,6 @@
 package com.example.cryptopricecompare.service;
 
-import com.example.cryptopricecompare.exception.NotFoundException;
+import com.example.cryptopricecompare.exception.EmptyResponseBodyException;
 import com.example.cryptopricecompare.integration.BinanceIntegrationClient;
 import com.example.cryptopricecompare.model.BaseSymbol;
 import com.example.cryptopricecompare.model.QuoteSymbol;
@@ -33,6 +33,10 @@ public class BinanceService implements ExchangeService {
 
     @Override
     public boolean supportsSymbols(BaseSymbol baseSymbol, QuoteSymbol quoteSymbol) {
+        if (!BinanceSymbolEnum.hasSymbol(baseSymbol) || !BinanceSymbolEnum.hasSymbol(quoteSymbol)) {
+            return false;
+        }
+
         return SUPPORTED_BASE_SYMBOLS.contains(BinanceSymbolEnum.binanceSymbolOf(baseSymbol)) &&
                 SUPPORTED_QUOTE_SYMBOLS.contains(BinanceSymbolEnum.binanceSymbolOf(quoteSymbol));
     }
@@ -43,7 +47,7 @@ public class BinanceService implements ExchangeService {
                 .getPriceBySymbol(formatSymbol(baseSymbol, quoteSymbol));
 
         if (isNull(tickerPriceResponse.getBody())) {
-            throw new NotFoundException(String.format("%s price not found on %s", baseSymbol, getExchangeName()));
+            throw new EmptyResponseBodyException(String.format("%s price service returned an empty response", getExchangeName()));
         }
 
         return tickerPriceResponse.getBody().getPrice();

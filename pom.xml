@@ -23,6 +23,8 @@
         <jackson-databind-nullable.version>0.2.6</jackson-databind-nullable.version>
         <jakarta.validation-api.version>3.0.2</jakarta.validation-api.version>
         <jakarta.servlet-api.version>6.0.0</jakarta.servlet-api.version>
+
+        <wiremock.version>3.0.2</wiremock.version>
     </properties>
     <dependencies>
         <dependency>
@@ -69,6 +71,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>${wiremock.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
