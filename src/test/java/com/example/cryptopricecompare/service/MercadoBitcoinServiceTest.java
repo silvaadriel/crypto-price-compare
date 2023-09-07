@@ -3,21 +3,32 @@ package com.example.cryptopricecompare.service;
 import com.example.cryptopricecompare.exception.EmptyResponseBodyException;
 import com.example.cryptopricecompare.model.BaseSymbol;
 import com.example.cryptopricecompare.model.QuoteSymbol;
+import com.example.cryptopricecompare.utils.Constants;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static org.junit.jupiter.api.Assertions.*;
+import static com.example.cryptopricecompare.utils.MockUtils.MockApiParams;
+import static com.example.cryptopricecompare.utils.MockUtils.mockGetApi;
+import static com.example.cryptopricecompare.utils.ResourceUtils.getContentFile;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@WireMockTest(httpPort = 8082)
+@WireMockTest(httpPort = Constants.MERCADO_BITCOIN_HTTP_PORT)
 @SpringBootTest
 class MercadoBitcoinServiceTest {
 
     @Autowired
     private MercadoBitcoinService mercadoBitcoinService;
+
+    @Value("classpath:json/mercado-bitcoin-ticker-price-response-ok.json")
+    private Resource mercadoBitcoinTickerPriceResponseOk;
 
     @Test
     public void testGetExchangeName() {
@@ -41,28 +52,23 @@ class MercadoBitcoinServiceTest {
 
     @Test
     public void testGetPrice() {
-        stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("[{\"pair\":\"BTC-BRL\",\"high\":\"130000.00000000\",\"low\":\"127000.06005000\",\"vol\":\"19.17774329\",\"last\":\"128559.72913616\",\"buy\":\"128550\",\"sell\":\"128595.3127362\",\"open\":\"128209.44308563\",\"date\":1694086627}]")));
+        mockGetApi(new MockApiParams(Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL),
+                HttpStatus.OK, getContentFile(mercadoBitcoinTickerPriceResponseOk)));
 
         String price = mercadoBitcoinService.getPrice(BaseSymbol.BTC, QuoteSymbol.BRL);
 
-        assertEquals("128559.72913616", price);
+        assertEquals(Constants.MERCADO_BITCOIN_BTC_PRICE, price);
     }
 
     @Test
     public void testGetPrice_EmptyResponseBody() {
-        stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("")));
+        mockGetApi(new MockApiParams(Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL),
+                HttpStatus.OK, ""));
 
         EmptyResponseBodyException ex = assertThrows(EmptyResponseBodyException.class, () -> {
             mercadoBitcoinService.getPrice(BaseSymbol.BTC, QuoteSymbol.BRL);
         });
-        assertEquals("Empty response body [Mercado Bitcoin price service returned an empty response]", ex.getMessage());
+        assertEquals("Empty response body [Mercado Bitcoin price service returned an empty response]",
+                ex.getMessage());
     }
 }

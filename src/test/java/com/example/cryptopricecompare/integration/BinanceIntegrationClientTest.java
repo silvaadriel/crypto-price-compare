@@ -1,63 +1,73 @@
 package com.example.cryptopricecompare.integration;
 
 import com.example.cryptopricecompare.model.dto.BinanceTickerPriceDTO;
+import com.example.cryptopricecompare.utils.Constants;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import feign.FeignException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static com.example.cryptopricecompare.utils.MockUtils.MockApiParams;
+import static com.example.cryptopricecompare.utils.MockUtils.mockGetApi;
+import static com.example.cryptopricecompare.utils.ResourceUtils.getContentFile;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@WireMockTest(httpPort = 8081)
+@WireMockTest(httpPort = Constants.BINANCE_HTTP_PORT)
 @SpringBootTest
 class BinanceIntegrationClientTest {
 
     @Autowired
     private BinanceIntegrationClient binanceIntegrationClient;
 
+    @Value("classpath:json/binance-ticker-price-response-ok.json")
+    private Resource binanceTickerPriceResponseOk;
+
+    @Value("classpath:json/binance-ticker-price-response-bad-request.json")
+    private Resource binanceTickerPriceResponseBadRequest;
+
     @Test
     public void testGetPriceBySymbol_200() {
-        stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCBRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"symbol\":\"BTCBRL\",\"price\":\"128710.00000000\"}")));
+        mockGetApi(new MockApiParams(Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_BRL),
+                HttpStatus.OK, getContentFile(binanceTickerPriceResponseOk)));
 
-        ResponseEntity<BinanceTickerPriceDTO> response = binanceIntegrationClient.getPriceBySymbol("BTCBRL");
+        ResponseEntity<BinanceTickerPriceDTO> response = binanceIntegrationClient
+                .getPriceBySymbol(Constants.BINANCE_BTC_BRL);
 
         assertNotNull(response.getBody());
-        assertEquals("BTCBRL", response.getBody().getSymbol());
-        assertEquals("128710.00000000", response.getBody().getPrice());
+        assertEquals(Constants.BINANCE_BTC_BRL, response.getBody().getSymbol());
+        assertEquals(Constants.BINANCE_BTC_PRICE, response.getBody().getPrice());
     }
 
     @Test
     public void testGetPriceBySymbol_400() {
-        stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "INVALID"))
-                .willReturn(aResponse()
-                        .withStatus(400)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"code\":-1121,\"msg\":\"Invalid symbol.\"}")));
+        String bodyContent = getContentFile(binanceTickerPriceResponseBadRequest);
+
+        mockGetApi(new MockApiParams(Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.INVALID_SYMBOL),
+                HttpStatus.BAD_REQUEST, bodyContent));
 
         FeignException ex = assertThrows(FeignException.BadRequest.class, () -> {
-            binanceIntegrationClient.getPriceBySymbol("INVALID");
+            binanceIntegrationClient.getPriceBySymbol(Constants.INVALID_SYMBOL);
         });
-        assertEquals("{\"code\":-1121,\"msg\":\"Invalid symbol.\"}", ex.contentUTF8());
+        assertEquals(bodyContent, ex.contentUTF8());
     }
 
     @Test
     public void testGetPriceBySymbol_500() {
-        stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "INVALID"))
-                .willReturn(aResponse()
-                        .withStatus(500)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("Internal server error")));
+        String bodyContent = "Internal server error";
+
+        mockGetApi(new MockApiParams(Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.INVALID_SYMBOL),
+                HttpStatus.INTERNAL_SERVER_ERROR, bodyContent));
 
         FeignException ex = assertThrows(FeignException.InternalServerError.class, () -> {
-            binanceIntegrationClient.getPriceBySymbol("INVALID");
+            binanceIntegrationClient.getPriceBySymbol(Constants.INVALID_SYMBOL);
         });
-        assertEquals("Internal server error", ex.contentUTF8());
+        assertEquals(bodyContent, ex.contentUTF8());
     }
 }

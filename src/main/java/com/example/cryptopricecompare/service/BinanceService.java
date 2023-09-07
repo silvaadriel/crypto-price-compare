@@ -47,15 +47,14 @@ public class BinanceService implements ExchangeService {
                 .getPriceBySymbol(formatSymbol(baseSymbol, quoteSymbol));
 
         if (isNull(tickerPriceResponse.getBody())) {
-            throw new EmptyResponseBodyException(String.format("%s price service returned an empty response", getExchangeName()));
+            throw new EmptyResponseBodyException("%s price service returned an empty response".formatted(getExchangeName()));
         }
 
         return tickerPriceResponse.getBody().getPrice();
     }
 
     private String formatSymbol(BaseSymbol baseSymbol, QuoteSymbol quoteSymbol) {
-        return String
-                .format(SYMBOL_FORMAT, BinanceSymbolEnum.valueOf(baseSymbol), BinanceSymbolEnum.valueOf(quoteSymbol));
+        return SYMBOL_FORMAT.formatted(BinanceSymbolEnum.valueOf(baseSymbol), BinanceSymbolEnum.valueOf(quoteSymbol));
     }
 
 }

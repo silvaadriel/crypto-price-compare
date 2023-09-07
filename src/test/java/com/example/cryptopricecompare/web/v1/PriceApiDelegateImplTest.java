@@ -2,39 +2,61 @@ package com.example.cryptopricecompare.web.v1;
 
 import com.example.cryptopricecompare.model.BaseSymbol;
 import com.example.cryptopricecompare.model.QuoteSymbol;
+import com.example.cryptopricecompare.utils.Constants;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.example.cryptopricecompare.utils.MockUtils.MockApiParams;
+import static com.example.cryptopricecompare.utils.MockUtils.mockGetApi;
+import static com.example.cryptopricecompare.utils.ResourceUtils.getContentFile;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 
 @SpringBootTest
 class PriceApiDelegateImplTest {
 
+    private static final String GET_PRICE_COMPARE_PATH = "/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s";
+
     @RegisterExtension
     public static WireMockExtension binanceWireMock = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(8081))
+            .options(wireMockConfig().port(Constants.BINANCE_HTTP_PORT))
             .build();
 
     @RegisterExtension
     public static WireMockExtension mercadoBitcoinWireMock = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(8082))
+            .options(wireMockConfig().port(Constants.MERCADO_BITCOIN_HTTP_PORT))
             .build();
 
     private MockMvc mockMvc;
 
     @Autowired
     private WebApplicationContext webApplicationContext;
+
+    @Value("classpath:json/binance-ticker-price-response-ok.json")
+    private Resource binanceTickerPriceResponseOk;
+
+    @Value("classpath:json/binance-ticker-price-usd-response-ok.json")
+    private Resource binanceTickerPriceUsdResponseOk;
+
+    @Value("classpath:json/binance-ticker-price-response-bad-request.json")
+    private Resource binanceTickerPriceResponseBadRequest;
+
+    @Value("classpath:json/mercado-bitcoin-ticker-price-response-ok.json")
+    private Resource mercadoBitcoinTickerPriceResponseOk;
+
+    @Value("classpath:json/mercado-bitcoin-ticker-price-response-bad-request.json")
+    private Resource mercadoBitcoinTickerPriceResponseBadRequest;
 
     @BeforeEach
     public void setup() {
@@ -43,20 +65,16 @@ class PriceApiDelegateImplTest {
 
     @Test
     public void testGetPriceCompare_SymbolsSupportedForAllExchanges() throws Exception {
-        binanceWireMock.stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCBRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"symbol\":\"BTCBRL\",\"price\":\"128710.00000000\"}")));
+        mockGetApi(binanceWireMock, new MockApiParams(
+                Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_BRL), HttpStatus.OK,
+                getContentFile(binanceTickerPriceResponseOk)));
 
-        mercadoBitcoinWireMock.stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("[{\"pair\":\"BTC-BRL\",\"high\":\"130000.00000000\",\"low\":\"127000.06005000\",\"vol\":\"19.17774329\",\"last\":\"128559.72913616\",\"buy\":\"128550\",\"sell\":\"128595.3127362\",\"open\":\"128209.44308563\",\"date\":1694086627}]")));
+        mockGetApi(mercadoBitcoinWireMock, new MockApiParams(
+                Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL), HttpStatus.OK,
+                getContentFile(mercadoBitcoinTickerPriceResponseOk)));
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s", BaseSymbol.BTC, QuoteSymbol.BRL)))
+                        .get(GET_PRICE_COMPARE_PATH.formatted(BaseSymbol.BTC, QuoteSymbol.BRL)))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -64,27 +82,25 @@ class PriceApiDelegateImplTest {
                                   "data": [
                                     {
                                       "exchange": "Binance",
-                                      "price": "128710.00000000"
+                                      "price": "%s"
                                     },
                                     {
                                       "exchange": "Mercado Bitcoin",
-                                      "price": "128559.72913616"
+                                      "price": "%s"
                                     }
                                   ]
                                 }
-                                """));
+                                """.formatted(Constants.BINANCE_BTC_PRICE, Constants.MERCADO_BITCOIN_BTC_PRICE)));
     }
 
     @Test
     public void testGetPriceCompare_NotReturnUnsupportedSymbolForMercadoBitcoin() throws Exception {
-        binanceWireMock.stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCUSDT"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"symbol\":\"BTCUSDT\",\"price\":\"128710.00000000\"}")));
+        mockGetApi(binanceWireMock, new MockApiParams(
+                Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_USD), HttpStatus.OK,
+                getContentFile(binanceTickerPriceUsdResponseOk)));
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s", BaseSymbol.BTC, QuoteSymbol.USD)))
+                        .get(GET_PRICE_COMPARE_PATH.formatted(BaseSymbol.BTC, QuoteSymbol.USD)))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -92,29 +108,24 @@ class PriceApiDelegateImplTest {
                                   "data": [
                                     {
                                       "exchange": "Binance",
-                                      "price": "128710.00000000"
+                                      "price": "%s"
                                     }
                                   ]
                                 }
-                                """));
+                                """.formatted(Constants.BINANCE_BTC_USD_PRICE)));
     }
 
     @Test
     public void testGetPriceCompare_BinanceEmptyResponseBody() throws Exception {
-        binanceWireMock.stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCBRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("")));
+        mockGetApi(binanceWireMock, new MockApiParams(
+                Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_BRL), HttpStatus.OK, ""));
 
-        mercadoBitcoinWireMock.stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("[{\"pair\":\"BTC-BRL\",\"high\":\"130000.00000000\",\"low\":\"127000.06005000\",\"vol\":\"19.17774329\",\"last\":\"128559.72913616\",\"buy\":\"128550\",\"sell\":\"128595.3127362\",\"open\":\"128209.44308563\",\"date\":1694086627}]")));
+        mockGetApi(mercadoBitcoinWireMock, new MockApiParams(
+                Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL), HttpStatus.OK,
+                getContentFile(mercadoBitcoinTickerPriceResponseOk)));
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s", BaseSymbol.BTC, QuoteSymbol.BRL)))
+                        .get(GET_PRICE_COMPARE_PATH.formatted(BaseSymbol.BTC, QuoteSymbol.BRL)))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -127,20 +138,14 @@ class PriceApiDelegateImplTest {
 
     @Test
     public void testGetPriceCompare_MercadoBitcoinEmptyResponseBody() throws Exception {
-        binanceWireMock.stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCBRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"symbol\":\"BTCBRL\",\"price\":\"128710.00000000\"}")));
+        mockGetApi(binanceWireMock, new MockApiParams(Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_BRL),
+                HttpStatus.OK, getContentFile(binanceTickerPriceResponseOk)));
 
-        mercadoBitcoinWireMock.stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("")));
+        mockGetApi(mercadoBitcoinWireMock, new MockApiParams(
+                Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL), HttpStatus.OK, ""));
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s", BaseSymbol.BTC, QuoteSymbol.BRL)))
+                        .get(GET_PRICE_COMPARE_PATH.formatted(BaseSymbol.BTC, QuoteSymbol.BRL)))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -153,20 +158,15 @@ class PriceApiDelegateImplTest {
 
     @Test
     public void testGetPriceCompare_BinanceBadRequest() throws Exception {
-        binanceWireMock.stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCBRL"))
-                .willReturn(aResponse()
-                        .withStatus(400)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"code\":-1121,\"msg\":\"Invalid symbol.\"}")));
+        mockGetApi(binanceWireMock, new MockApiParams(Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_BRL),
+                HttpStatus.BAD_REQUEST, getContentFile(binanceTickerPriceResponseBadRequest)));
 
-        mercadoBitcoinWireMock.stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("[{\"pair\":\"BTC-BRL\",\"high\":\"130000.00000000\",\"low\":\"127000.06005000\",\"vol\":\"19.17774329\",\"last\":\"128559.72913616\",\"buy\":\"128550\",\"sell\":\"128595.3127362\",\"open\":\"128209.44308563\",\"date\":1694086627}]")));
+        mockGetApi(mercadoBitcoinWireMock, new MockApiParams(
+                Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL), HttpStatus.OK,
+                getContentFile(mercadoBitcoinTickerPriceResponseOk)));
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s", BaseSymbol.BTC, QuoteSymbol.BRL)))
+                        .get(GET_PRICE_COMPARE_PATH.formatted(BaseSymbol.BTC, QuoteSymbol.BRL)))
                 .andExpect(MockMvcResultMatchers.status().isInternalServerError())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -179,20 +179,15 @@ class PriceApiDelegateImplTest {
 
     @Test
     public void testGetPriceCompare_MercadoBitcoinBadRequest() throws Exception {
-        binanceWireMock.stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCBRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"symbol\":\"BTCBRL\",\"price\":\"128710.00000000\"}")));
+        mockGetApi(binanceWireMock, new MockApiParams(Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_BRL),
+                HttpStatus.OK, getContentFile(binanceTickerPriceResponseOk)));
 
-        mercadoBitcoinWireMock.stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(400)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"code\":\"PUBLIC_DATA|LIST_TICKERS|SYMBOLS_IS_REQUIRED\",\"message\":\"The param {symbols} must not be empty\"}")));
+        mockGetApi(mercadoBitcoinWireMock, new MockApiParams(
+                Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL), HttpStatus.BAD_REQUEST,
+                getContentFile(mercadoBitcoinTickerPriceResponseBadRequest)));
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s", BaseSymbol.BTC, QuoteSymbol.BRL)))
+                        .get(GET_PRICE_COMPARE_PATH.formatted(BaseSymbol.BTC, QuoteSymbol.BRL)))
                 .andExpect(MockMvcResultMatchers.status().isInternalServerError())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -205,20 +200,15 @@ class PriceApiDelegateImplTest {
 
     @Test
     public void testGetPriceCompare_BinanceInternalServerError() throws Exception {
-        binanceWireMock.stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCBRL"))
-                .willReturn(aResponse()
-                        .withStatus(500)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("Internal server error")));
+        mockGetApi(binanceWireMock, new MockApiParams(Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_BRL),
+                HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"));
 
-        mercadoBitcoinWireMock.stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("[{\"pair\":\"BTC-BRL\",\"high\":\"130000.00000000\",\"low\":\"127000.06005000\",\"vol\":\"19.17774329\",\"last\":\"128559.72913616\",\"buy\":\"128550\",\"sell\":\"128595.3127362\",\"open\":\"128209.44308563\",\"date\":1694086627}]")));
+        mockGetApi(mercadoBitcoinWireMock, new MockApiParams(
+                Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL), HttpStatus.OK,
+                getContentFile(mercadoBitcoinTickerPriceResponseOk)));
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s", BaseSymbol.BTC, QuoteSymbol.BRL)))
+                        .get(GET_PRICE_COMPARE_PATH.formatted(BaseSymbol.BTC, QuoteSymbol.BRL)))
                 .andExpect(MockMvcResultMatchers.status().isInternalServerError())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -231,20 +221,15 @@ class PriceApiDelegateImplTest {
 
     @Test
     public void testGetPriceCompare_MercadoBitcoinInternalServerError() throws Exception {
-        binanceWireMock.stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCBRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"symbol\":\"BTCBRL\",\"price\":\"128710.00000000\"}")));
+        mockGetApi(binanceWireMock, new MockApiParams(Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_BRL),
+                HttpStatus.OK, getContentFile(binanceTickerPriceResponseOk)));
 
-        mercadoBitcoinWireMock.stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(500)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("Internal server error")));
+        mockGetApi(mercadoBitcoinWireMock, new MockApiParams(
+                Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL),
+                HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"));
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s", BaseSymbol.BTC, QuoteSymbol.BRL)))
+                        .get(GET_PRICE_COMPARE_PATH.formatted(BaseSymbol.BTC, QuoteSymbol.BRL)))
                 .andExpect(MockMvcResultMatchers.status().isInternalServerError())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -258,7 +243,7 @@ class PriceApiDelegateImplTest {
     @Test
     public void testGetPriceCompare_InvalidBaseSymbol() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s", "INVALID", QuoteSymbol.BRL)))
+                        .get(GET_PRICE_COMPARE_PATH.formatted(Constants.INVALID_SYMBOL, QuoteSymbol.BRL)))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -272,7 +257,7 @@ class PriceApiDelegateImplTest {
     @Test
     public void testGetPriceCompare_InvalidQuoteSymbol() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s&quoteSymbol=%s", BaseSymbol.BTC, "INVALID")))
+                        .get(GET_PRICE_COMPARE_PATH.formatted(BaseSymbol.BTC, Constants.INVALID_SYMBOL)))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -286,7 +271,7 @@ class PriceApiDelegateImplTest {
     @Test
     public void testGetPriceCompare_MissingBaseSymbol() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?quoteSymbol=%s", QuoteSymbol.BRL)))
+                        .get(GET_PRICE_COMPARE_PATH.replace("baseSymbol=%s&", "").formatted(QuoteSymbol.BRL)))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """
@@ -300,7 +285,7 @@ class PriceApiDelegateImplTest {
     @Test
     public void testGetPriceCompare_MissingQuoteSymbol() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders
-                        .get(String.format("/api/v1/price/compare?baseSymbol=%s", BaseSymbol.BTC)))
+                        .get(GET_PRICE_COMPARE_PATH.replace("&quoteSymbol=%s", "").formatted(BaseSymbol.BTC)))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
                 .andExpect(MockMvcResultMatchers.content().json(
                         """

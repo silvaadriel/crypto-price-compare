@@ -1,73 +1,76 @@
 package com.example.cryptopricecompare.integration;
 
 import com.example.cryptopricecompare.model.dto.MercadoBitcoinTickerPriceDTO;
+import com.example.cryptopricecompare.utils.Constants;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import feign.FeignException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static com.example.cryptopricecompare.utils.MockUtils.MockApiParams;
+import static com.example.cryptopricecompare.utils.MockUtils.mockGetApi;
+import static com.example.cryptopricecompare.utils.ResourceUtils.getContentFile;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@WireMockTest(httpPort = 8082)
+@WireMockTest(httpPort = Constants.MERCADO_BITCOIN_HTTP_PORT)
 @SpringBootTest
 class MercadoBitcoinIntegrationClientTest {
 
     @Autowired
     private MercadoBitcoinIntegrationClient mercadoBitcoinIntegrationClient;
 
+    @Value("classpath:json/mercado-bitcoin-ticker-price-response-ok.json")
+    private Resource mercadoBitcoinTickerPriceResponseOk;
+
+    @Value("classpath:json/mercado-bitcoin-ticker-price-response-bad-request.json")
+    private Resource mercadoBitcoinTickerPriceResponseBadRequest;
+
     @Test
     public void testGetPriceBySymbols_200() {
-        stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("[{\"pair\":\"BTC-BRL\",\"high\":\"130000.00000000\",\"low\":\"127000.06005000\",\"vol\":\"19.17774329\",\"last\":\"128559.72913616\",\"buy\":\"128550\",\"sell\":\"128595.3127362\",\"open\":\"128209.44308563\",\"date\":1694086627}]")));
+        mockGetApi(new MockApiParams(Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL),
+                HttpStatus.OK, getContentFile(mercadoBitcoinTickerPriceResponseOk)));
 
-        ResponseEntity<List<MercadoBitcoinTickerPriceDTO>> response = mercadoBitcoinIntegrationClient.getPriceBySymbols("BTC-BRL");
+        ResponseEntity<List<MercadoBitcoinTickerPriceDTO>> response = mercadoBitcoinIntegrationClient
+                .getPriceBySymbols(Constants.MERCADO_BITCOIN_BTC_BRL);
 
         assertNotNull(response.getBody());
         assertEquals(1, response.getBody().size());
-        assertEquals("BTC-BRL", response.getBody().get(0).getPair());
-        assertEquals("130000.00000000", response.getBody().get(0).getHigh());
-        assertEquals("127000.06005000", response.getBody().get(0).getLow());
-        assertEquals("19.17774329", response.getBody().get(0).getVol());
-        assertEquals("128559.72913616", response.getBody().get(0).getLast());
-        assertEquals("128550", response.getBody().get(0).getBuy());
-        assertEquals("128595.3127362", response.getBody().get(0).getSell());
-        assertEquals("128209.44308563", response.getBody().get(0).getOpen());
-        assertEquals("1694086627", response.getBody().get(0).getDate());
+        assertEquals(Constants.MERCADO_BITCOIN_BTC_BRL, response.getBody().get(0).getPair());
+        assertEquals(Constants.MERCADO_BITCOIN_BTC_PRICE, response.getBody().get(0).getLast());
     }
 
     @Test
     public void testGetPriceBySymbols_400() {
-        stubFor(get(String.format("/api/v4/tickers?symbols=%s", "INVALID"))
-                .willReturn(aResponse()
-                        .withStatus(400)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"code\":\"PUBLIC_DATA|LIST_TICKERS|SYMBOLS_IS_REQUIRED\",\"message\":\"The param {symbols} must not be empty\"}")));
+        String bodyContent = getContentFile(mercadoBitcoinTickerPriceResponseBadRequest);
+
+        mockGetApi(new MockApiParams(Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.INVALID_SYMBOL),
+                HttpStatus.BAD_REQUEST, bodyContent));
 
         FeignException ex = assertThrows(FeignException.BadRequest.class, () -> {
-            mercadoBitcoinIntegrationClient.getPriceBySymbols("INVALID");
+            mercadoBitcoinIntegrationClient.getPriceBySymbols(Constants.INVALID_SYMBOL);
         });
-        assertEquals("{\"code\":\"PUBLIC_DATA|LIST_TICKERS|SYMBOLS_IS_REQUIRED\",\"message\":\"The param {symbols} must not be empty\"}", ex.contentUTF8());
+        assertEquals(bodyContent, ex.contentUTF8());
     }
 
     @Test
     public void testGetPriceBySymbols_500() {
-        stubFor(get(String.format("/api/v4/tickers?symbols=%s", "INVALID"))
-                .willReturn(aResponse()
-                        .withStatus(500)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("Internal server error")));
+        String bodyContent = "Internal server error";
+
+        mockGetApi(new MockApiParams(Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.INVALID_SYMBOL),
+                HttpStatus.INTERNAL_SERVER_ERROR, bodyContent));
 
         FeignException ex = assertThrows(FeignException.InternalServerError.class, () -> {
-            mercadoBitcoinIntegrationClient.getPriceBySymbols("INVALID");
+            mercadoBitcoinIntegrationClient.getPriceBySymbols(Constants.INVALID_SYMBOL);
         });
-        assertEquals("Internal server error", ex.contentUTF8());
+        assertEquals(bodyContent, ex.contentUTF8());
     }
 }

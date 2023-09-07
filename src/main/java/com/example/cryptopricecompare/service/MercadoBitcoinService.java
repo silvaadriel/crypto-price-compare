@@ -47,18 +47,14 @@ public class MercadoBitcoinService implements ExchangeService {
                 .getPriceBySymbols(formatSymbol(baseSymbol, quoteSymbol));
 
         if (isNull(tickerPricesResponse.getBody())) {
-            throw new EmptyResponseBodyException(String.format("%s price service returned an empty response", getExchangeName()));
+            throw new EmptyResponseBodyException("%s price service returned an empty response".formatted(getExchangeName()));
         }
 
         return tickerPricesResponse.getBody().get(0).getLast();
     }
 
     private String formatSymbol(BaseSymbol baseSymbol, QuoteSymbol quoteSymbol) {
-        return String.format(
-                SYMBOL_FORMAT,
-                MercadoBitcoinSymbolEnum.valueOf(baseSymbol),
-                MercadoBitcoinSymbolEnum.valueOf(quoteSymbol)
-        );
+        return SYMBOL_FORMAT.formatted(MercadoBitcoinSymbolEnum.valueOf(baseSymbol), MercadoBitcoinSymbolEnum.valueOf(quoteSymbol));
     }
 
 }

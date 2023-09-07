@@ -4,16 +4,21 @@ import com.example.cryptopricecompare.model.BaseSymbol;
 import com.example.cryptopricecompare.model.ExchangePrice;
 import com.example.cryptopricecompare.model.PriceComparisonResponse;
 import com.example.cryptopricecompare.model.QuoteSymbol;
+import com.example.cryptopricecompare.utils.Constants;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.example.cryptopricecompare.utils.MockUtils.MockApiParams;
+import static com.example.cryptopricecompare.utils.MockUtils.mockGetApi;
+import static com.example.cryptopricecompare.utils.ResourceUtils.getContentFile;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -22,37 +27,41 @@ class PriceServiceTest {
 
     @RegisterExtension
     public static WireMockExtension binanceWireMock = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(8081))
+            .options(wireMockConfig().port(Constants.BINANCE_HTTP_PORT))
             .build();
 
     @RegisterExtension
     public static WireMockExtension mercadoBitcoinWireMock = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(8082))
+            .options(wireMockConfig().port(Constants.MERCADO_BITCOIN_HTTP_PORT))
             .build();
 
     @Autowired
     private PriceService priceService;
 
+    @Value("classpath:json/binance-ticker-price-response-ok.json")
+    private Resource binanceTickerPriceResponseOk;
+
+    @Value("classpath:json/binance-ticker-price-usd-response-ok.json")
+    private Resource binanceTickerPriceUsdResponseOk;
+
+    @Value("classpath:json/mercado-bitcoin-ticker-price-response-ok.json")
+    private Resource mercadoBitcoinTickerPriceResponseOk;
+
     @Test
     public void testGetPriceCompare_SymbolsSupportedForAllExchanges() {
-        binanceWireMock.stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCBRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"symbol\":\"BTCBRL\",\"price\":\"128710.00000000\"}")));
+        mockGetApi(binanceWireMock, new MockApiParams(Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_BRL),
+                HttpStatus.OK, getContentFile(binanceTickerPriceResponseOk)));
 
-        mercadoBitcoinWireMock.stubFor(get(String.format("/api/v4/tickers?symbols=%s", "BTC-BRL"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("[{\"pair\":\"BTC-BRL\",\"high\":\"130000.00000000\",\"low\":\"127000.06005000\",\"vol\":\"19.17774329\",\"last\":\"128559.72913616\",\"buy\":\"128550\",\"sell\":\"128595.3127362\",\"open\":\"128209.44308563\",\"date\":1694086627}]")));
+        mockGetApi(mercadoBitcoinWireMock, new MockApiParams(
+                Constants.MERCADO_BITCOIN_TICKER_PRICE_PATH.formatted(Constants.MERCADO_BITCOIN_BTC_BRL), HttpStatus.OK,
+                getContentFile(mercadoBitcoinTickerPriceResponseOk)));
 
         ExchangePrice binance = new ExchangePrice()
                 .exchange("Binance")
-                .price("128710.00000000");
+                .price(Constants.BINANCE_BTC_PRICE);
         ExchangePrice mercadoBitcoin = new ExchangePrice()
                 .exchange("Mercado Bitcoin")
-                .price("128559.72913616");
+                .price(Constants.MERCADO_BITCOIN_BTC_PRICE);
 
         PriceComparisonResponse response = priceService.getPriceCompare(BaseSymbol.BTC, QuoteSymbol.BRL);
 
@@ -62,17 +71,14 @@ class PriceServiceTest {
 
     @Test
     public void testGetPriceCompare_NotReturnUnsupportedSymbolForMercadoBitcoin() {
-        binanceWireMock.stubFor(get(String.format("/api/v3/ticker/price?symbol=%s", "BTCUSDT"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"symbol\":\"BTCUSDT\",\"price\":\"25696.75000000\"}")));
+        mockGetApi(binanceWireMock, new MockApiParams(Constants.BINANCE_TICKER_PRICE_PATH.formatted(Constants.BINANCE_BTC_USD),
+                HttpStatus.OK, getContentFile(binanceTickerPriceUsdResponseOk)));
 
         PriceComparisonResponse response = priceService.getPriceCompare(BaseSymbol.BTC, QuoteSymbol.USD);
 
         ExchangePrice binance = new ExchangePrice()
                 .exchange("Binance")
-                .price("25696.75000000");
+                .price(Constants.BINANCE_BTC_USD_PRICE);
 
         assertEquals(1, response.getData().size());
         assertEquals(List.of(binance), response.getData());
