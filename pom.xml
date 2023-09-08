@@ -25,7 +25,7 @@
         <jakarta.servlet-api.version>6.0.0</jakarta.servlet-api.version>
 
         <junit-vintage-engine.version>5.10.0</junit-vintage-engine.version>
-        <wiremock.version>3.0.2</wiremock.version>
+        <wiremock.version>3.0.3</wiremock.version>
     </properties>
     <dependencies>
         <dependency>
